@@ -1,0 +1,38 @@
+INSERT INTO llm_config (
+    model,
+    family,
+    mode,
+    formatter,
+    run_mode,
+    run_count,
+    sleep,
+    accuracy_check,
+    negative_prompt,
+    use_for_training,
+    error_detection,
+    phi_detection,
+    mapper,
+    isactive,
+    parameters,
+    phi_allowed_list,
+    phi_allowed_entities
+) VALUES (
+    'gpt-4o-2024-11-20',
+    'openai',
+    'serial',
+    'ros_pe_formatter',
+    'same-llm',
+    1,
+    0.75,
+    'ON',
+    'ON',
+    FALSE,
+    TRUE,
+    TRUE,
+    NULL,
+    TRUE,
+    '{ "seed": 91919191, "temperature": 0.0001 }',
+    ARRAY['Prickling', 'numbness', 'tingling', 'sensation'],
+    ARRAY['PERSON', 'PHONE_NUMBER', 'EMAIL_ADDRESS', 'LOCATION', 'US_SSN', 'CREDIT_CARD', 'ADDRESS']
+);
+

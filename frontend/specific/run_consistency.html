@@ -166,14 +166,14 @@
                 showMessage('info', 'Consistency tests completed successfully');
                 
                 const resultsLinkDiv = document.getElementById('resultsLink');
-                resultsLinkDiv.innerHTML = `<a href="/specific/view_test_results.html?test-id=${data.test_run_no}&mode=consistency_check" class="primary-button">
+                resultsLinkDiv.innerHTML = `<a href="#" onclick="window.open('/specific/view_test_results.html?test-id=${data.test_run_no}&mode=consistency_check&page=${selectedPage}', '_blank', 'width=1200,height=800'); return false;" class="primary-button">
                     <i class="fas fa-chart-bar"></i> View Test Results
                 </a>`;
                 
                 console.log('Test response:', data);
             } catch (error) {
                 console.error('Error:', error);
-                showMessage('error', 'Failed to run consistency tests');
+                showMessage('error', 'Failed to run consistency tests - '+error);
             } finally {
                 loadingMessage.remove();
                 managePage('enable');

@@ -40,7 +40,7 @@ i_data={}
 def generate(client,count,prompt,page):    
     print("Entering method: generate")
     #logger.critical(f"generate - {prompt}")
-    num_tokens_from_string(''.join([theSystemPrompt, prompt]), 'cl100k_base', "input")
+    input_token_count = num_tokens_from_string(''.join([theSystemPrompt, prompt]), 'cl100k_base', "input")
     #logger.critical(f"theSystemPrompt-{theSystemPrompt}")
 
     completion_params = {
@@ -54,9 +54,14 @@ def generate(client,count,prompt,page):
     completion_params.update(shared_data_instance.get_data('completion_params'))
     print(f"modified completion_params-{completion_params}")
  
+    start = time.perf_counter()
     chat_completion = client.chat.completions.create(**completion_params)   
+    
+    llm_latency = time.perf_counter() - start
+    print(f"Time taken to get real LLM response - {llm_latency:0.2f} seconds.")
 
     response = chat_completion.choices[0].message.content
+    
     print(f"chat_completion-total_tokens-{chat_completion.usage.total_tokens}")
     print(f"chat_completion-completion_tokens-{chat_completion.usage.completion_tokens}")
     print(f"chat_completion-prompt_tokens-{chat_completion.usage.prompt_tokens}")
@@ -67,7 +72,10 @@ def generate(client,count,prompt,page):
     print(f"chat_completion.system_fingerprint-{chat_completion.system_fingerprint}")
 
     shared_data_instance.set_data('fingerprint', chat_completion.system_fingerprint)
-    num_tokens_from_string(response,'cl100k_base', "output")
+    output_token_count = num_tokens_from_string(response,'cl100k_base', "output")
+    shared_data_instance.set_data('input_token_count', input_token_count)
+    shared_data_instance.set_data('output_token_count', output_token_count)
+    shared_data_instance.set_data('llm_latency', llm_latency)
     #logger.critical(f'unformatted response...  {count} ...' , response)
     
     #This got replaced by the pydantic formatter
@@ -103,6 +111,7 @@ def init_AI_client(model_family, model):
 
     #completion_params = config[model_family]["parameters"]
     llm_config = LLMConfig.get_config()
+    print(f"llm_config-{llm_config}")
     completion_params = json.loads(llm_config['parameters'])
     shared_data_instance.set_data('completion_params', completion_params)
     
@@ -314,7 +323,10 @@ def log(usecase, page, response, time, mode):
             'ideal_response_difference': idealResponse_changes,
             'similarity_metric':f'accuracy_difflib_similarity->>{accuracy_difflib_similarity} -- repro_difflib_similarity->>{repro_difflib_similarity}',
             'use_for_training': shared_data_instance.get_data('use_for_training'),
-            'fingerprint': shared_data_instance.get_data('fingerprint')
+            'fingerprint': shared_data_instance.get_data('fingerprint'),
+            'input_token_count': shared_data_instance.get_data('input_token_count'),
+            'output_token_count': shared_data_instance.get_data('output_token_count'),
+            'llm_latency': round(shared_data_instance.get_data('llm_latency'),2)
         }    
         db_data.append(i_data)
     #logger.info(f"** db_data - {db_data}")
@@ -429,6 +441,11 @@ def _process_test_llm(usecase, page, mode, model_family, formatter,
     """Handle test LLM processing mode"""
     result = get_test_data(test_size_limit,page)
     
+    # Check if result is empty or None
+    if result is None or result.empty:
+        logger.error(f"No test data found for page: {page}")
+        raise ValueError(f"No test data available for page: {page}")
+    
     for count, row in result.iterrows():
         logger.critical(f"Running test {count+1} of total {len(result)}")
         if row['user_prompt'] is not None:
@@ -448,7 +465,7 @@ def _process_test_llm(usecase, page, mode, model_family, formatter,
             print(f"key while extracting-{shared_data_instance.get_data('run_no')}")
             test_result =test_map[shared_data_instance.get_data('run_no')] 
             test_result['execution_time'] = round(time.time() - start_time, 2)
-
+            test_result['llm_latency'] = shared_data_instance.get_data('llm_latency')
 
     return _generate_test_summary('consistency','consistency-eval-test')
 
@@ -507,6 +524,7 @@ def _process_eval_test_llm(usecase, page, mode, model_family, formatter,
                 )
                 # Store test results
                 test_result = test_map[shared_data_instance.get_data('run_no')]
+                test_result['llm_latency'] = round(shared_data_instance.get_data('llm_latency'),2)
                 test_result['execution_time'] = round(time.time() - start_time, 2)
                 results.append(test_result)
         eval_name = shared_data_instance.get_data('eval_request').evalName    
@@ -523,7 +541,7 @@ def _process_same_llm(usecase, page, mode, model_family, formatter,
         sync_async_runner(
             usecase, page, mode, model_family, formatter,
             run_mode, sleep, model, prompt
-        ) for _ in range(run_count)
+        ) for _ in range(int(run_count))
     ]
     
     confidence_map = shared_data_instance.get_data('confidence_map')

@@ -68,7 +68,7 @@ def topological_sort(dependencies: Dict[str, Set[str]]) -> List[str]:
 
 def create_tables_from_excel(
     file_path: str,
-    connection_string: str = "postgresql://postgres:postgres@localhost:5432/Clone-LLM"
+    connection_string: str = "postgresql://postgres:postgres@localhost:5432/postgres"
 ) -> None:
     """Create database tables based on schema defined in Excel file."""
     try:
@@ -134,5 +134,7 @@ def create_tables_from_excel(
 
 if __name__ == "__main__":
     # Example usage
-    excel_file = "db_schema.csv"  # Your Excel file path
+    excel_file = "backend/misc/db_schema.csv"  # Your Excel file path
     create_tables_from_excel(excel_file)
+
+

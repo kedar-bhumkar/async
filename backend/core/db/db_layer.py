@@ -117,7 +117,10 @@ def insert(data_list):
                 data['similarity_metric'],                
                 datetime.now(),  # Current date for run_date
                 data['use_for_training'],
-                data['fingerprint']
+                data['fingerprint'],
+                data['input_token_count'],
+                data['output_token_count'],
+                data['llm_latency']
             ) 
             for data in data_list  
         ]
@@ -197,16 +200,16 @@ def insert_test_results_data(model:str,total_tests: int, tests_passed: int, test
             conn.close()
 
 
-def insert_test_results_detail_data(model:str,test_run_no: int,original_response: str,actual_response: str,ideal_response: str,difference: str,original_run_no: int,original_prompt: str, execution_time: float,fingerprint: str,matched_tokens: bool,mismatched_tokens: bool,mismatch_percentage: float, page: str,status: str):
+def insert_test_results_detail_data(model:str,test_run_no: int,original_response: str,actual_response: str,ideal_response: str,difference: str,original_run_no: int,original_prompt: str, execution_time: float,fingerprint: str,matched_tokens: bool,mismatched_tokens: bool,mismatch_percentage: float, page: str,status: str,llm_latency: float):
     #logger.critical(f"insert_test_results_detail_data - {model},{test_run_no},{original_response},{actual_response},{ideal_response},{difference},{original_run_no},{original_prompt}")
     conn, cursor = connect()
     try: 
         insert_query = """
-        INSERT INTO test_results_detail (test_run_no, original_response, actual_response, ideal_response, difference,original_run_no,original_prompt, execution_time,fingerprint,matched_tokens,mismatched_tokens,mismatch_percentage, page,status)
-        VALUES (%s, %s, %s, %s, %s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        INSERT INTO test_results_detail (test_run_no, original_response, actual_response, ideal_response, difference,original_run_no,original_prompt, execution_time,fingerprint,matched_tokens,mismatched_tokens,mismatch_percentage, page,status,llm_latency)
+        VALUES (%s, %s, %s, %s, %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """
 
-        cursor.execute(insert_query, (test_run_no, original_response, actual_response, ideal_response, difference,original_run_no,original_prompt, execution_time,fingerprint,matched_tokens,mismatched_tokens,mismatch_percentage, page,status))
+        cursor.execute(insert_query, (test_run_no, original_response, actual_response, ideal_response, difference,original_run_no,original_prompt, execution_time,fingerprint,matched_tokens,mismatched_tokens,mismatch_percentage, page,status,llm_latency))
         conn.commit()
         print(f"Test results detail inserted successfully with run number: {test_run_no}")
 
@@ -225,7 +228,7 @@ def save_test_results(test_map,model,total_tests,passed_tests,failed_tests,pass_
     test_run_no = insert_test_results_data(model,total_tests,passed_tests,failed_tests,pass_rate,average_execution_time,test_type,eval_name,accuracy)
     for test in test_map.values():
         print(f"test['execution_time']-{test['execution_time']}")
-        insert_test_results_detail_data(model,test_run_no,test['original_response'],test['actual_response'],test['ideal_response'],test['idealResponse_changes'],test['original_run_no'],test['original_prompt'], test['execution_time'], test['fingerprint'],test['matched_tokens'],test['mismatched_tokens'],test['mismatch_percentage'], test['page'],test['status'])
+        insert_test_results_detail_data(model,test_run_no,test['original_response'],test['actual_response'],test['ideal_response'],test['idealResponse_changes'],test['original_run_no'],test['original_prompt'], test['execution_time'], test['fingerprint'],test['matched_tokens'],test['mismatched_tokens'],test['mismatch_percentage'], test['page'],test['status'],test['llm_latency'])
 
     return test_run_no
     

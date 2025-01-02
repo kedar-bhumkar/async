@@ -35,10 +35,11 @@ INSERT_QUERY = """
             similarity_metric,
             run_date,
             use_for_training,
-            fingerprint
-            
-
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            fingerprint,
+            input_token_count,
+            output_token_count,
+            llm_latency
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         """
 READ_QUERY = """
         SELECT 
