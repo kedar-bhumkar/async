@@ -67,7 +67,7 @@ def doChat( request:Request, message:Message):
     response = handleRequest(message)
     print(f"acd_response - {response}")
     return {"acd_response": response}
-    #return {"acd_response": theResponse}
+
 
 @app.post("/transcribe")
 def doTranscribe( request:Request, audioMessage: AudioMessage):    
@@ -84,7 +84,7 @@ def doTestResults( request:Request, testResults:TestResults):
 
 @app.post("/eval")
 def doEval( request:Request, evalRequest:EvalRequest):    
-    print(f"Inside doEval ")    
+    print(f"Inside doEval ")     
     # Print all keys and values in shared_data_instance
     print("Shared Data Instance Contents:")
     print(shared_data_instance.get_data('page'))
@@ -92,10 +92,12 @@ def doEval( request:Request, evalRequest:EvalRequest):
     page = evalRequest.page
     usecase = 'acd'
     print(f"csv_data - {evalRequest.csv_data}") 
-    #shared_data_instance.set_data('eval_fil', evalRequest.csv_data)
-    shared_data_instance.set_data('eval_request', evalRequest)
-    shared_data_instance.set_data('page', evalRequest.page)
-    test_run_no =  process_request(usecase, page, None, None, None, "eval-test-llm")  
+
+   # shared_data_instance.set_data('eval_request', evalRequest)
+   # shared_data_instance.set_data('page', evalRequest.page)
+
+    message = Message(run_mode="eval-test-llm", eval_request=evalRequest, usecase=usecase, page=page)
+    test_run_no =  process_request(message)  
     return {"test_run_no": test_run_no}
 
 
@@ -104,9 +106,10 @@ def doConsistency( request:Request, consistencyRequest:ConsistencyRequest):
     print(f"Inside doConsistency ")    
     
     page = consistencyRequest.page
-    usecase = 'acd'
+    usecase = 'acd'  
     shared_data_instance.set_data('page', consistencyRequest.page)
-    test_run_no =  process_request(usecase, page, None, None, None, "cli-test-llm")  
+    message = Message(run_mode="cli-test-llm", consistency_request=consistencyRequest,usecase=usecase, page=page)
+    test_run_no =  process_request(message)  
     return {"test_run_no": test_run_no}
 
 @app.get("/test-names")

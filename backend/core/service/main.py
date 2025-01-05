@@ -19,6 +19,7 @@ import uuid
 
 clientSync = any
 theModel = any
+theLlmParameters = any
 theFormatter = None
 thePrompt = None
 theSystemPrompt= None
@@ -39,9 +40,7 @@ i_data={}
 
 def generate(client,count,prompt,page):    
     print("Entering method: generate")
-    #logger.critical(f"generate - {prompt}")
     input_token_count = num_tokens_from_string(''.join([theSystemPrompt, prompt]), 'cl100k_base', "input")
-    #logger.critical(f"theSystemPrompt-{theSystemPrompt}")
 
     completion_params = {
        "messages": [
@@ -51,7 +50,7 @@ def generate(client,count,prompt,page):
        "model": theModel
    }
 
-    completion_params.update(shared_data_instance.get_data('completion_params'))
+    completion_params.update(theLlmParameters)
     print(f"modified completion_params-{completion_params}")
  
     start = time.perf_counter()
@@ -66,9 +65,6 @@ def generate(client,count,prompt,page):
     print(f"chat_completion-completion_tokens-{chat_completion.usage.completion_tokens}")
     print(f"chat_completion-prompt_tokens-{chat_completion.usage.prompt_tokens}")
     print(f"chat_completion-prompt_tokens_details_cached_tokens-{chat_completion.usage.prompt_tokens_details.cached_tokens}")
-    #print(f"chat_completion.usage.completion_tokens_details.accepted_prediction_tokens-{chat_completion.usage.completion_tokens_details.accepted_prediction_tokens}")
-    #print(f"chat_completion.usage.completion_tokens_details.rejected_prediction_tokens-{chat_completion.usage.completion_tokens_details.rejected_prediction_tokens}")
-    #print(f"chat_completion.usage.completion_tokens_details.reasoning_tokens-{chat_completion.usage.completion_tokens_details.reasoning_tokens}")
     print(f"chat_completion.system_fingerprint-{chat_completion.system_fingerprint}")
 
     shared_data_instance.set_data('fingerprint', chat_completion.system_fingerprint)
@@ -76,58 +72,40 @@ def generate(client,count,prompt,page):
     shared_data_instance.set_data('input_token_count', input_token_count)
     shared_data_instance.set_data('output_token_count', output_token_count)
     shared_data_instance.set_data('llm_latency', llm_latency)
-    #logger.critical(f'unformatted response...  {count} ...' , response)
-    
-    #This got replaced by the pydantic formatter
-    #formatted_json = transform_response(theFormatter, response)
-    #logger.info(f'response...  {count} ...' , formatted_json)
+
     return response
  
 # Serial
-def generate_serially(usecase, page, mode, prompt):  
+def generate_serially( page, prompt):  
     print("Entering method: generate_serially")
-    global clientSync, thePrompt  
-    config = getConfig(prompts_file) 
-    #thePrompt = (config[usecase]['user_prompt'][page][mode]['input'])  
-    thePrompt = prompt        
-   
-    thePrompt = prompt_constrainer(page,thePrompt,-1)
+    global clientSync, thePrompt     
+    thePrompt = prompt_constrainer(page,prompt,-1)
     return [generate(clientSync, 0, thePrompt, page)]
-
-
-
 
 
 def init_AI_client(model_family, model):
     print("Entering method: init_AI_client")
-    global clientSync, theModel
-    
+    global clientSync, theModel,theLlmParameters
+    theModel = model
+
+    llm_config = LLMConfig.get_config()
+    theLlmParameters = json.loads(llm_config['parameters'])  
+
     config = getConfig(config_file)
     print(f"config-{config}")
-    if(model==None):
-        theModel =  config[model_family]["preferred_model"]
-    else:    
-        theModel = model
 
-    #completion_params = config[model_family]["parameters"]
-    llm_config = LLMConfig.get_config()
-    print(f"llm_config-{llm_config}")
-    completion_params = json.loads(llm_config['parameters'])
-    shared_data_instance.set_data('completion_params', completion_params)
-    
     clientSync = OpenAI(
-        api_key  = config['openai']['key'],
-        base_url = config['openai']['url'],
+        api_key  = config[model_family]['key'],
+        base_url = config[model_family]['url'],
     ) 
 
-def init_prompts(usecase, page, mode):
+def init_prompts(usecase, page):
     print("Entering method: init_prompts")
     global thePrompt,theSystemPrompt,theIdealResponse
     config = getConfig(prompts_file)     
-    #theSystemPrompt = config[usecase]['system_prompt']
+
     theSystemPrompt = get_system_prompt(usecase, page)
-    #print('cache info = ' , get_system_prompt.cache_info()) 
-    #logger.critical(f"the_System_Prompt-{theSystemPrompt}")
+
     if(shared_data_instance.get_data('theIdealResponse') == None or shared_data_instance.get_data('theIdealResponse') == ''):
         theIdealResponse = config[usecase]['user_prompt'][page]['serial']['ideal_response']
     else:
@@ -136,10 +114,10 @@ def init_prompts(usecase, page, mode):
 
 def prompt_constrainer(page,thePrompt, count=None):
     print("Entering method: prompt_constrainer")
-    logger.critical(f"trnascript-{thePrompt}")
-    page_index = page
+    
     negativePrompt = ''
     thePrompt = replace_dates(thePrompt)
+    
     #remove phi/pii    
     if(shared_data_instance.get_data('phi_detection') == True):
         print(f"Inside phi detection ")
@@ -148,45 +126,23 @@ def prompt_constrainer(page,thePrompt, count=None):
         print(f"phi detection is off")
     
     sharedPrompt = thePrompt
+    
     #Create copy so that we just get what the user said minus constraints 
     shared_data_instance.set_data('thePrompt', sharedPrompt)
-    #logger.info(f"page_index-{page_index}")
+    
     if(shared_data_instance.get_data('negative_prompt')== True):
         negativePrompt = fuzzyMatch(thePrompt)   
     logger.critical(f"negativePrompt-{negativePrompt}")
-
-    start_time = time.time()
+    
     try:
-        if(count!=-1):
-            page_index = page+ str(count)
-        cls = globals()[page_index]
+        cls = globals()[page]
     except:
         logger.info(f"No pydantic model defined")
     else:    
         logger.info(f"pydantic model defined")
         response_schema_dict = cls.model_json_schema()
-        response_schema_json = json.dumps(response_schema_dict, indent=2)    
-        end_time = time.time()
-        print(f"Time taken to get response schema - {end_time-start_time}")
- 
-        #logger.info(f"response_schema_json-{response_schema_json}")
-        #print(f"response_schema_json-{response_schema_json}")
-        constraints = "constraints"+ str(count)
-        #print(f"constraints-{constraints}")
-        logger.info(f"constraints-{constraints}")
-        logger.info(f"thePrompt-{thePrompt}")
-         
-        # @todo REFACTOR THIS
-        if(count == -1):
-            thePrompt = thePrompt.format(constraints=response_schema_json,missing_sections=negativePrompt)
-            #print(f"thePrompt-{thePrompt}")
-            exit
-        if(count == 0):
-            thePrompt = thePrompt.format(constraints0=response_schema_json,missing_sections=negativePrompt)
-        elif (count ==1):
-            thePrompt = thePrompt.format(constraints1=response_schema_json,missing_sections=negativePrompt)
-        elif (count ==2):
-            thePrompt = thePrompt.format(constraints2=response_schema_json,missing_sections=negativePrompt)
+        response_schema_json = json.dumps(response_schema_dict, indent=2)             
+        thePrompt = thePrompt.format(constraints=response_schema_json,missing_sections=negativePrompt)    
         logger.info(f"thePrompt ****** -{thePrompt}")
     finally:
         return thePrompt
@@ -194,51 +150,33 @@ def prompt_constrainer(page,thePrompt, count=None):
 
 
 
-def sync_async_runner(usecase, page, mode, model_family,formatter, run_mode, sleep_time, model, prompt):    
+def sync_async_runner(message:Message):    
     print("Entering method: sync_async_runner")
     global theFormatter, i_data, db_data
     db_data = []
     
-    # Parallel invoker
-    if(mode == None):
-        mode = LLMConfig.get_default("mode") 
 
-    if(page == None):
-        page = LLMConfig.get_default("page")      
-
-    if(model_family == None):
-        model_family = LLMConfig.get_default("family") 
-
-    if(formatter != None):
-        theFormatter = LLMConfig.get_default("formatter")      
+    theFormatter = message.formatter
     
-    if(usecase == None):
-        usecase = LLMConfig.get_default("usecase") 
-
-    if(sleep_time == None):
-        sleep_time = LLMConfig.get_default("sleep")    
-    logger.info(f"model-{model}")
-    init_AI_client(model_family, model)
+    init_AI_client(message.family, message.model)
     print(f"Calling  init_prompts")
-    init_prompts(usecase, page, mode)
+    init_prompts(message.usecase, message.page)
 
-
-
-    if (mode == "serial" or  mode == "dual"):   
+    if (message.mode == "serial" or  message.mode == "dual"):   
         # Serial invoker
         start = time.perf_counter()
-        response = generate_serially(usecase, page, mode, prompt)        
+        response = generate_serially(message.page, message.prompt)        
         end = time.perf_counter() - start        
         response = response[0]
         
         logger.info(f"Serial Program finished in {end:0.2f} seconds.")
-
+    # Parallel invoker code not supported anymore
     
-    if(run_mode !=None):
-        response = log(usecase, page, response, end, mode)
+    if(message.run_mode !=None):
+        response = log(message.usecase, message.page, response, end, message.mode)
         #logger.critical(f"f-response-{response}")
    
-    time.sleep(float(sleep_time))
+    time.sleep(float(message.sleep))
   
     return response
 
@@ -258,6 +196,7 @@ def log(usecase, page, response, time, mode):
     
     test_result = {}
 
+    #Used for reproducibility tests with the 1st test taken as baseline
     if(len(db_data)>0):
         isBaseline = False
         first_response = db_data[0]['response']
@@ -268,16 +207,16 @@ def log(usecase, page, response, time, mode):
         reproducibility_changes = ''
         repro_difflib_similarity = 1.0
 
+    formatted_ideal_response = get_Pydantic_Filtered_Response(page,theIdealResponse, None)       
+    matches_idealResponse, idealResponse_changes,accuracy_difflib_similarity, matched_tokens, mismatched_tokens, mismatch_percentage = compare(formatted_ideal_response, formatted_real_response)
+
+    #Used for same-llm mode
     if(accuracy_check == "ON" and (run_mode != 'cli-test-llm' or run_mode != 'eval-test-llm')):
-         logger.info(f"theIdealResponse - {theIdealResponse}, response -{response}")
-         formatted_ideal_response = get_Pydantic_Filtered_Response(page,theIdealResponse, None)       
-         #print(f"formatted_ideal_response - {formatted_ideal_response}" )
          shared_data_instance.set_data('theIdealResponse', formatted_ideal_response)
-         matches_idealResponse, idealResponse_changes,accuracy_difflib_similarity, matched_tokens, mismatched_tokens, mismatch_percentage = compare(formatted_ideal_response, formatted_real_response)
+    #used for test mode     
     elif(run_mode == 'cli-test-llm' or run_mode == 'eval-test-llm'):
          logger.info(f"Running test")
-         formatted_ideal_response = get_Pydantic_Filtered_Response(page,theIdealResponse, None)                
-         matches_idealResponse, idealResponse_changes,accuracy_difflib_similarity, matched_tokens, mismatched_tokens, mismatch_percentage = compare(formatted_ideal_response, formatted_real_response)
+         
          test_result['matches_idealResponse'] = matches_idealResponse
          test_result['idealResponse_changes'] = idealResponse_changes
          test_result['accuracy_difflib_similarity'] = accuracy_difflib_similarity
@@ -334,117 +273,105 @@ def log(usecase, page, response, time, mode):
 
 
 
-def process_request(usecase, page, mode=None, model_family=None, formatter=None, run_mode=None, sleep=None, model=None, 
-                   prompt=None, run_count=None, accuracy_check=None, negative_prompt=None, use_for_training=None, 
-                   error_detection=None, phi_detection=None, test_size_limit=1, file_name=None, ideal_response=None):
-    """Common processing logic for both CLI and API requests"""
+def init_defaults(message: Message):
+    message.mode = message.mode or LLMConfig.get_default("mode")
+    message.run_mode = message.run_mode or LLMConfig.get_default("run_mode")
+    message.family = message.family or LLMConfig.get_default("family")
+    message.formatter = message.formatter or LLMConfig.get_default("formatter")
+    message.run_count = message.run_count or LLMConfig.get_default("run_count")
+    message.accuracy_check = message.accuracy_check or LLMConfig.get_default("accuracy_check")
+    message.use_for_training = message.use_for_training or LLMConfig.get_default("use_for_training")
+    message.error_detection = message.error_detection or LLMConfig.get_default("error_detection")
+    message.phi_detection = message.phi_detection or LLMConfig.get_default("phi_detection")
+    message.negative_prompt = message.negative_prompt or LLMConfig.get_default("negative_prompt")
+    message.sleep = message.sleep or LLMConfig.get_default("sleep")
+    message.model = message.model or LLMConfig.get_default("model")
+    message.prompt = message.prompt or LLMConfig.get_default("prompt")
+    message.ideal_response = message.ideal_response or LLMConfig.get_default("ideal_response")
+    message.usecase = message.usecase or LLMConfig.get_default("usecase")
+    message.page = message.page or LLMConfig.get_default("page")
+    message.test_size_limit = message.test_size_limit or 10
+    logger.critical(f"message-{message}")
+    return message
+
+def process_request(message: Message):
     global run_id, theIdealResponse, test_map, db_data
-
-    # Initialize defaults if not provided
-    mode = mode or LLMConfig.get_default("mode")
-    run_mode = run_mode or LLMConfig.get_default("run_mode")
-    model_family = model_family or LLMConfig.get_default("family")
-    formatter = formatter or LLMConfig.get_default("formatter")
-    run_count = run_count or LLMConfig.get_default("run_count")
-    accuracy_check = accuracy_check or LLMConfig.get_default("accuracy_check")
-    use_for_training = use_for_training or LLMConfig.get_default("use_for_training")
-    error_detection = error_detection or LLMConfig.get_default("error_detection")
-    phi_detection = phi_detection or LLMConfig.get_default("phi_detection")
-    negative_prompt = negative_prompt or LLMConfig.get_default("negative_prompt")
-    sleep = sleep or LLMConfig.get_default("sleep")
-    model = model or LLMConfig.get_default("model")
-    logger.critical(
-        f"usecase-{usecase}, page-{page}, mode-{mode}, family-{model_family}, "
-        f"formatter-{formatter}, run_mode-{run_mode}, run_count-{run_count}, "
-        f"sleep-{sleep}, accuracy_check-{accuracy_check}, model-{model}, "
-        f"negative_prompt-{negative_prompt}, use_for_training-{use_for_training}, "
-        f"phi_detection-{phi_detection}, file_name-{file_name}, ideal_response-{ideal_response}"
-    )
-
+    message = init_defaults(message)
+    
     # Set shared data
     shared_data = {
-        'negative_prompt': negative_prompt,
-        'use_for_training': use_for_training,
-        'error_detection': error_detection,
-        'run_mode': run_mode,
-        'phi_detection': phi_detection,
-        'theIdealResponse': ideal_response,
-        'prompt': prompt
-    }
+        'negative_prompt': message.negative_prompt,
+        'use_for_training': message.use_for_training,
+        'error_detection': message.error_detection,
+        'run_mode': message.run_mode,
+        'phi_detection': message.phi_detection,
+        'theIdealResponse': message.ideal_response,
+        'prompt': message.prompt
+    }    
+
+
     for key, value in shared_data.items():
-        shared_data_instance.set_data(key, value)
+            shared_data_instance.set_data(key, value)
 
     run_id = getRunID(8)
-    config = getConfig(prompts_file)
+    config = getConfig(prompts_file)    
 
     # if file_name is provided, process each prompt in the file in serial mode on same llm
-    if file_name is not None:
-        df_prompts = load_prompt_from_file(file_name)        
-        if df_prompts is not None:
-            for index, row in df_prompts.iterrows():
-                prompt = row['Transcript']
-                if isinstance(prompt, str):
-                    prompt = add_space_after_punctuation(prompt)
-                    _process_same_llm(usecase, page, mode, model_family, formatter, run_mode, sleep, model, prompt, run_count, accuracy_check)
-        else:
-            logger.error(f"No prompts found in the file: {file_name}")
+    if message.file_name is not None:
+        return _process_prompts_via_file(message)
 
     else:
         # if file_name is not provided, process the prompt based on below logic        
-        if prompt is None and (run_mode != "cli-test-llm" or  run_mode != "eval-test-llm"):
-            prompt = config[usecase]['user_prompt'][page][mode]['input']
+        if message.prompt is None and (message.run_mode != "cli-test-llm" or  message.run_mode != "eval-test-llm"):
+            prompt = config[message.usecase]['user_prompt'][message.page][message.mode]['input']
             if isinstance(prompt, str):
                     prompt = add_space_after_punctuation(prompt)     
         
 
         # Process based on run mode
-        if run_mode == "multiple-llm":
-            return _process_multiple_llm(
-                usecase, page, mode, formatter, run_mode, sleep, prompt
-            )
+        if message.run_mode == "multiple-llm":
+            return _process_multiple_llm(message)
 
-        elif run_mode == "cli-test-llm":
-            return _process_test_llm(
-                usecase, page, mode, model_family, formatter, 
-                run_mode, sleep, model, test_size_limit
-            )
+        elif message.run_mode == "cli-test-llm":
+            return _process_test_llm(message)
 
-        elif run_mode == "eval-test-llm":
-            return _process_eval_test_llm(
-                usecase, page, mode, model_family, formatter, 
-                run_mode, sleep, model, test_size_limit
-            )
+        elif message.run_mode == "eval-test-llm":
+            return _process_eval_test_llm(message)
 
         else:  # same-llm mode
-            return _process_same_llm(
-                usecase, page, mode, model_family, formatter,
-                run_mode, sleep, model, prompt, run_count, accuracy_check
-            )
+            return _process_same_llm(message)    
 
-def _process_multiple_llm(usecase, page, mode, formatter, run_mode, sleep, prompt):
+def _process_prompts_via_file(message:Message):
+    df_prompts = load_prompt_from_file(message.file_name)        
+    if df_prompts is not None:
+        for index, row in df_prompts.iterrows():
+            prompt = row['Transcript']
+            if isinstance(prompt, str):
+                prompt = add_space_after_punctuation(prompt)
+                _process_same_llm(message)
+    else:
+        logger.error(f"No prompts found in the file: {message.file_name}")
+
+def _process_multiple_llm(message:Message):
     """Handle multiple LLM processing mode"""
     result = parse_models(getConfig(config_file))
     responses = []
     
     for model_family, models in result.items():
         for model in models:
-            response = sync_async_runner(
-                usecase, page, mode, model_family, 
-                formatter, run_mode, sleep, model, prompt
-            )
+            response = sync_async_runner(message)
             responses.append(response)
     
     return responses
 
-def _process_test_llm(usecase, page, mode, model_family, formatter, 
-                     run_mode, sleep, model, test_size_limit):
+def _process_test_llm(message:Message):
     """Handle test LLM processing mode"""
-    result = get_test_data(test_size_limit,page)
+    result = get_test_data(message.test_size_limit,message.consistency_request.page)
     
     # Check if result is empty or None
     if result is None or result.empty:
-        logger.error(f"No test data found for page: {page}")
-        raise ValueError(f"No test data available for page: {page}")
+        logger.error(f"No test data found for page: {message.page}")
+        raise ValueError(f"No test data available for page: {message.page}")
     
     for count, row in result.iterrows():
         logger.critical(f"Running test {count+1} of total {len(result)}")
@@ -458,10 +385,10 @@ def _process_test_llm(usecase, page, mode, model_family, formatter,
                 '{missing_sections}'
             ])
             start_time = time.time()
-            sync_async_runner(
-                row['usecase'], row['functionality'], mode,
-                model_family, formatter, run_mode, sleep, model, prompt
-            )
+            message.prompt = prompt
+            message.page = row['functionality']
+            message.usecase = row['usecase']
+            sync_async_runner(message)
             print(f"key while extracting-{shared_data_instance.get_data('run_no')}")
             test_result =test_map[shared_data_instance.get_data('run_no')] 
             test_result['execution_time'] = round(time.time() - start_time, 2)
@@ -470,11 +397,10 @@ def _process_test_llm(usecase, page, mode, model_family, formatter,
     return _generate_test_summary('consistency','consistency-eval-test')
 
 
-def _process_eval_test_llm(usecase, page, mode, model_family, formatter, 
-                     run_mode, sleep, model, test_size_limit):
+def _process_eval_test_llm(message:Message):
     print("Entering method: _process_eval_test_llm")
     
-    eval_file_data = shared_data_instance.get_data('eval_request').csv_data
+    eval_file_data = message.eval_request.csv_data
     print(f"eval_file_data-{eval_file_data}")
     if not eval_file_data:
         logger.error("No evaluation file data found")
@@ -518,30 +444,26 @@ def _process_eval_test_llm(usecase, page, mode, model_family, formatter,
                 _setup_test_data(row)         
                 # Execute test
                 start_time = time.time()
-                sync_async_runner(
-                    usecase, page, mode,
-                    model_family, formatter, run_mode, sleep, model, prompt
-                )
+                message.prompt = prompt
+                message.page = message.eval_request.page                
+                sync_async_runner(message)
+                
                 # Store test results
                 test_result = test_map[shared_data_instance.get_data('run_no')]
                 test_result['llm_latency'] = round(shared_data_instance.get_data('llm_latency'),2)
                 test_result['execution_time'] = round(time.time() - start_time, 2)
                 results.append(test_result)
-        eval_name = shared_data_instance.get_data('eval_request').evalName    
+        eval_name = message.eval_request.evalName    
         print(f"eval_name-{eval_name}")
         return _generate_test_summary('eval', eval_name)
     except Exception as e:
         logger.error(f"Error processing evaluation file: {str(e)}")
         return {"error": str(e)}
 
-def _process_same_llm(usecase, page, mode, model_family, formatter,
-                     run_mode, sleep, model, prompt, run_count, accuracy_check):
+def _process_same_llm(message:Message):
     """Handle same LLM processing mode"""
     response = [
-        sync_async_runner(
-            usecase, page, mode, model_family, formatter,
-            run_mode, sleep, model, prompt
-        ) for _ in range(int(run_count))
+        sync_async_runner(message) for _ in range(int(message.run_count))
     ]
     
     confidence_map = shared_data_instance.get_data('confidence_map')
@@ -606,24 +528,8 @@ def handleRequest(message: Message):
     if isinstance(message.prompt, str):
         message.prompt = add_space_after_punctuation(message.prompt)
         
-    return process_request( 
-        usecase=message.usecase,
-        page=message.page,
-        mode=message.mode,
-        model_family=message.family,
-        formatter=message.formatter,
-        run_mode=message.run_mode,
-        sleep=message.sleep,
-        model=message.model,
-        prompt=message.prompt,
-        run_count=message.run_count,
-        accuracy_check=message.accuracy_check,
-        negative_prompt=message.negative_prompt,
-        use_for_training=message.use_for_training,
-        error_detection=message.error_detection,
-        phi_detection=message.phi_detection,
-        ideal_response=message.ideal_response
-    )
+
+    return process_request(message)
 
 
 
