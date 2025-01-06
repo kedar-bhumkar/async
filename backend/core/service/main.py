@@ -200,7 +200,7 @@ def log(usecase, page, response, time, mode):
     if(len(db_data)>0):
         isBaseline = False
         first_response = db_data[0]['response']
-        matches_baseline, reproducibility_changes, repro_difflib_similarity, matched_tokens, mismatched_tokens , mismatch_percentage = compare(get_Pydantic_Filtered_Response(page, first_response,None), get_Pydantic_Filtered_Response(page,response,None))
+        result = compare(get_Pydantic_Filtered_Response(page, first_response,None), get_Pydantic_Filtered_Response(page,response,None))
     else:
         isBaseline = True
         matches_baseline = True
@@ -208,7 +208,7 @@ def log(usecase, page, response, time, mode):
         repro_difflib_similarity = 1.0
 
     formatted_ideal_response = get_Pydantic_Filtered_Response(page,theIdealResponse, None)       
-    matches_idealResponse, idealResponse_changes,accuracy_difflib_similarity, matched_tokens, mismatched_tokens, mismatch_percentage = compare(formatted_ideal_response, formatted_real_response)
+    result = compare(formatted_ideal_response, formatted_real_response)
 
     #Used for same-llm mode
     if(accuracy_check == "ON" and (run_mode != 'cli-test-llm' or run_mode != 'eval-test-llm')):
@@ -217,12 +217,12 @@ def log(usecase, page, response, time, mode):
     elif(run_mode == 'cli-test-llm' or run_mode == 'eval-test-llm'):
          logger.info(f"Running test")
          
-         test_result['matches_idealResponse'] = matches_idealResponse
-         test_result['idealResponse_changes'] = idealResponse_changes
-         test_result['accuracy_difflib_similarity'] = accuracy_difflib_similarity
-         test_result['matched_tokens'] = matched_tokens
-         test_result['mismatched_tokens'] = mismatched_tokens
-         test_result['mismatch_percentage'] = round(mismatch_percentage,2)
+         test_result['matches_idealResponse'] = result.is_match
+         test_result['idealResponse_changes'] = result.metrics
+         test_result['accuracy_difflib_similarity'] = result.similarity_ratio
+         test_result['matched_tokens'] = result.matched_tokens
+         test_result['mismatched_tokens'] = result.mismatched_tokens
+         test_result['mismatch_percentage'] = round(result.mismatch_percentage,2)
          test_result['ideal_response'] = formatted_ideal_response
          test_result['actual_response'] = formatted_real_response
          test_result['original_response'] = shared_data_instance.get_data('original_response')  

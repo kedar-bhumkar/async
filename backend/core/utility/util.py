@@ -105,8 +105,16 @@ def compare(resp1: str, resp2: str):
     )
 
     
-    return (tokens1 == tokens2), changes, metrics, matched_tokens, mismatched_tokens, mismatch_percentage
+    #return (tokens1 == tokens2), changes, metrics, matched_tokens, mismatched_tokens, mismatch_percentage
     
+    return ComparisonResult(
+        is_match=(tokens1 == tokens2),
+        changes=changes,
+        metrics=metrics,
+        matched_tokens=matched_tokens,
+        mismatched_tokens=mismatched_tokens,
+        mismatch_percentage=mismatch_percentage
+    )
 
 
 def num_tokens_from_string(string: str, encoding_name: str, type: str) -> int:
