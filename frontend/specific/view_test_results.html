@@ -130,6 +130,34 @@
       display: inline-block;
       padding: 0 2px;
     }
+
+    .code-tooltip {
+      width: 500px;
+      max-height: 400px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .json-content {
+      margin: 0;
+      text-align: left;
+      font-family: monospace;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      background: transparent;
+      border: none;
+      color: white;
+      cursor: pointer;
+      padding: 5px;
+    }
+
+    .copy-btn:hover {
+      color: #007bff;
+    }
   </style>
 </head>
 <body>
@@ -167,8 +195,28 @@
             <button id="nextButton" onclick="nextTest()">Next</button>
           </div>
           <div class="container">            
-            <h2 id="responseLabel1">Actual Response</h2>
-            <h2 id="responseLabel2">Ideal Response</h2>
+            <h2 id="responseLabel1">
+              Actual Response
+              <span class="info-icon"><i class="fas fa-code"></i>
+                <span class="tooltip code-tooltip">
+                  <pre class="json-content"></pre>
+                  <button class="copy-btn" onclick="copyToClipboard(this)">
+                    <i class="fas fa-copy"></i>
+                  </button>
+                </span>
+              </span>
+            </h2>
+            <h2 id="responseLabel2">
+              Ideal Response
+              <span class="info-icon"><i class="fas fa-code"></i>
+                <span class="tooltip code-tooltip">
+                  <pre class="json-content"></pre>
+                  <button class="copy-btn" onclick="copyToClipboard(this)">
+                    <i class="fas fa-copy"></i>
+                  </button>
+                </span>
+              </span>
+            </h2>
           </div>
           <div class="container">           
             <div id="actualPane" class="pane"></div>
@@ -371,6 +419,18 @@
             renderJsonInSections(idealResponse, 'idealPane', actualResponse);
             renderJsonInSections(actualResponse, 'actualPane', idealResponse);
           }
+
+        // Update tooltips with formatted JSON
+        const actualTooltip = document.querySelector('#responseLabel1 .json-content');
+        const idealTooltip = document.querySelector('#responseLabel2 .json-content');
+        
+        try {
+
+          actualTooltip.textContent = JSON.stringify(JSON.parse(llmResponse.acd_response.response[0]), null, 2);
+          idealTooltip.textContent = JSON.stringify(JSON.parse(llmResponse.acd_response.ideal_response), null, 2);
+        } catch (error) {
+          console.error('Error formatting JSON for tooltips:', error);
+        }          
         } else {
           console.log('No Ideal Response found in session storage')
           // Hide ideal pane and mismatch percentage
@@ -387,7 +447,16 @@
           } else {
             renderJsonInSections(actualResponse, 'actualPane');
           }
-        }
+
+        // Update tooltips with formatted JSON
+        const actualTooltip = document.querySelector('#responseLabel1 .json-content');
+        try {
+          console.log('actual_response', actual_response)       
+          actualTooltip.textContent = JSON.stringify(JSON.parse(llmResponse.acd_response.response[0]), null, 2);       
+        } catch (error) {
+          console.error('Error formatting JSON for tooltips:', error);
+        }          
+       }
       } else {
         throw new Error('No LLM response found in session storage');
       }
@@ -571,6 +640,19 @@
 
       document.getElementById('prevButton').disabled = index === 0;
       document.getElementById('nextButton').disabled = index === keys.length - 1;
+
+      // Update tooltips with formatted JSON
+      const actualTooltip = document.querySelector('#responseLabel1 .json-content');
+      const idealTooltip = document.querySelector('#responseLabel2 .json-content');
+      
+      try {
+        console.log('actual_response', actual_response)
+        console.log('ideal_response', ideal_response)
+        actualTooltip.textContent = JSON.stringify(JSON.parse(actual_response), null, 2);
+        idealTooltip.textContent = JSON.stringify(JSON.parse(ideal_response), null, 2);
+      } catch (error) {
+        console.error('Error formatting JSON for tooltips:', error);
+      }
     }
 
     fetchTestResults(testId);
@@ -591,6 +673,18 @@
       currentIndex++;
       renderTest(currentIndex);
     }
+  }
+
+  function copyToClipboard(button) {
+    const tooltip = button.closest('.tooltip');
+    const jsonContent = tooltip.querySelector('.json-content').textContent;
+    navigator.clipboard.writeText(jsonContent).then(() => {
+      const icon = button.querySelector('i');
+      icon.className = 'fas fa-check';
+      setTimeout(() => {
+        icon.className = 'fas fa-copy';
+      }, 2000);
+    });
   }
 </script>
 </body>

@@ -1,7 +1,5 @@
-import asyncio
-from openai import AsyncOpenAI, OpenAI
+from openai import  OpenAI
 import time
-import argparse
 from backend.core.logging.custom_logger import *
 from backend.core.model.pydantic_models import *
 from backend.core.utility.constants import *
@@ -13,9 +11,8 @@ from backend.core.utility.phi_remover import *
 from backend.core.utility.shared import *
 from backend.core.utility.LLMConfig import *
 import pandas as pd
-import base64
 from io import StringIO
-import uuid
+
 
 clientSync = any
 theModel = any
@@ -173,7 +170,7 @@ def sync_async_runner(message:Message):
     # Parallel invoker code not supported anymore
     
     if(message.run_mode !=None):
-        response = log(message.usecase, message.page, response, end, message.mode)
+        response = log(message, response, end)
         #logger.critical(f"f-response-{response}")
    
     time.sleep(float(message.sleep))
@@ -181,94 +178,79 @@ def sync_async_runner(message:Message):
     return response
 
 
-
-def log(usecase, page, response, time, mode):    
-    print("Entering method: log")
-    #logger.critical(f"logging in db ...mode={mode}, response ={response}")
-    global theFormatter, i_data, db_data, run_id,theIdealResponse,thePrompt,test_map
-    matches_idealResponse = None
-    run_mode = shared_data_instance.get_data('run_mode')   
-    repro_difflib_similarity = None
-    accuracy_difflib_similarity = None
-
-    formatted_real_response = get_Pydantic_Filtered_Response(page,response,theFormatter,response_type='actual')
-    #print(f"formatted_real_response - {formatted_real_response}" )
+def init_test_result(message:Message, result,formatted_ideal_response,formatted_real_response):
+    print("Entering method: init_test_result")
     
     test_result = {}
+    test_result['matches_idealResponse'] = result.is_match
+    test_result['idealResponse_changes'] = result.changes
+    test_result['accuracy_difflib_similarity'] = result.metrics
+    test_result['matched_tokens'] = result.matched_tokens
+    test_result['mismatched_tokens'] = result.mismatched_tokens
+    test_result['mismatch_percentage'] = round(result.mismatch_percentage,2)
+    test_result['ideal_response'] = formatted_ideal_response
+    test_result['actual_response'] = formatted_real_response
+    test_result['original_response'] = shared_data_instance.get_data('original_response')  
+    test_result['original_run_no'] = shared_data_instance.get_data('original_run_no')
+    test_result['original_prompt'] = shared_data_instance.get_data('original_prompt')
+    test_result['fingerprint'] = shared_data_instance.get_data('fingerprint')
+    test_result['page'] = message.page
+    test_result['status'] = 'success'
+    
+    return test_result
 
-    #Used for reproducibility tests with the 1st test taken as baseline
-    if(len(db_data)>0):
-        isBaseline = False
-        first_response = db_data[0]['response']
-        result = compare(get_Pydantic_Filtered_Response(page, first_response,None), get_Pydantic_Filtered_Response(page,response,None))
-    else:
-        isBaseline = True
-        matches_baseline = True
-        reproducibility_changes = ''
-        repro_difflib_similarity = 1.0
-
-    formatted_ideal_response = get_Pydantic_Filtered_Response(page,theIdealResponse, None)       
-    result = compare(formatted_ideal_response, formatted_real_response)
-
-    #Used for same-llm mode
-    if(accuracy_check == "ON" and (run_mode != 'cli-test-llm' or run_mode != 'eval-test-llm')):
-         shared_data_instance.set_data('theIdealResponse', formatted_ideal_response)
-    #used for test mode     
-    elif(run_mode == 'cli-test-llm' or run_mode == 'eval-test-llm'):
-         logger.info(f"Running test")
-         
-         test_result['matches_idealResponse'] = result.is_match
-         test_result['idealResponse_changes'] = result.metrics
-         test_result['accuracy_difflib_similarity'] = result.similarity_ratio
-         test_result['matched_tokens'] = result.matched_tokens
-         test_result['mismatched_tokens'] = result.mismatched_tokens
-         test_result['mismatch_percentage'] = round(result.mismatch_percentage,2)
-         test_result['ideal_response'] = formatted_ideal_response
-         test_result['actual_response'] = formatted_real_response
-         test_result['original_response'] = shared_data_instance.get_data('original_response')  
-         test_result['original_run_no'] = shared_data_instance.get_data('original_run_no')
-         test_result['original_prompt'] = shared_data_instance.get_data('original_prompt')
-         test_result['fingerprint'] = shared_data_instance.get_data('fingerprint')
-         test_result['page'] = shared_data_instance.get_data('page')
-         test_result['status'] = 'success'
-         logger.critical(f"accuracy_difflib_similarity-{accuracy_difflib_similarity}")
-         print(f"key while saving-{shared_data_instance.get_data('run_no')}")
-         test_map[shared_data_instance.get_data('run_no')] = test_result
-    else:
-        matches_idealResponse = ""
-        idealResponse_changes = ""    
-        formatted_ideal_response = ""
-
-
-    if(run_mode != 'cli-test-llm' and run_mode != 'eval-test-llm'):
-        if(mode=='parallel'):
-            thePrompt = shared_data_instance.get_data('transcript')
-        i_data = {
-            'usecase':usecase,
-            'mode':mode,
-            'functionality':page,
+def init_run_stats(message:Message,result:ComparisonResult,time,formatted_ideal_response,formatted_real_response):    
+    print("Entering method: init_run_stats")
+    global run_id, theSystemPrompt,thePrompt,theModel
+    print(f"formatted_ideal_response-{formatted_ideal_response}")
+    run_stats = {
+            'usecase': message.usecase,
+            'mode':message.mode,
+            'functionality':message.page,
             'llm':theModel,
             'llm_parameters': LLMConfig.get_config()['parameters'],
-            'isBaseline': isBaseline,
+            'isBaseline': True,
             'run_no': run_id,
             'system_prompt': theSystemPrompt,
             'user_prompt': truncate_prompt(thePrompt),
             'response': formatted_real_response,
             'ideal_response':formatted_ideal_response,
             'execution_time': time,
-            'matches_baseline': matches_baseline,
-            'matches_ideal':matches_idealResponse,
-            'difference': reproducibility_changes,
-            'ideal_response_difference': idealResponse_changes,
-            'similarity_metric':f'accuracy_difflib_similarity->>{accuracy_difflib_similarity} -- repro_difflib_similarity->>{repro_difflib_similarity}',
+            'matches_baseline': True,
+            'matches_ideal':result.is_match,
+            'difference': '',
+            'ideal_response_difference': result.changes,
+            'similarity_metric':result.metrics,
             'use_for_training': shared_data_instance.get_data('use_for_training'),
             'fingerprint': shared_data_instance.get_data('fingerprint'),
             'input_token_count': shared_data_instance.get_data('input_token_count'),
             'output_token_count': shared_data_instance.get_data('output_token_count'),
             'llm_latency': round(shared_data_instance.get_data('llm_latency'),2)
-        }    
+        }
+
+    return run_stats
+
+def log(message:Message,response, time):    
+    print("Entering method: log")
+    #logger.critical(f"logging in db ...mode={mode}, response ={response}")
+    global theFormatter, i_data, db_data, run_id,theIdealResponse,thePrompt,test_map    
+    run_mode = shared_data_instance.get_data('run_mode')    
+    formatted_ideal_response = ""
+    
+    formatted_real_response = get_Pydantic_Filtered_Response(message.page,response,theFormatter,response_type='actual')
+    formatted_ideal_response = get_Pydantic_Filtered_Response(message.page,theIdealResponse, None)       
+    
+    result = compare(formatted_ideal_response, formatted_real_response)
+    shared_data_instance.set_data('theIdealResponse', formatted_ideal_response)
+
+    if(run_mode == 'cli-test-llm' or run_mode == 'eval-test-llm'):
+         logger.info(f"Running {run_mode} test")         
+         print(f"key while saving-{shared_data_instance.get_data('run_no')}")
+         test_map[shared_data_instance.get_data('run_no')] = init_test_result(message,result,formatted_ideal_response,formatted_real_response)
+    else:
+        i_data = init_run_stats(message,result,time,formatted_ideal_response,formatted_real_response)    
         db_data.append(i_data)
-    #logger.info(f"** db_data - {db_data}")
+    
     return formatted_real_response
 
 
@@ -461,21 +443,11 @@ def _process_eval_test_llm(message:Message):
         return {"error": str(e)}
 
 def _process_same_llm(message:Message):
+    global db_data  
     """Handle same LLM processing mode"""
-    response = [
-        sync_async_runner(message) for _ in range(int(message.run_count))
-    ]
-    
-    confidence_map = shared_data_instance.get_data('confidence_map')
-    
-    if run_mode is not None:
-        insert(db_data)
-        print_reproducibility_stats(readWithGroupFilter(run_id))
-    
-    if accuracy_check == "ON":
-        print_accuracy_stats(readWithGroupFilter(run_id))
-        
-    return {"response": response, "confidence_map": confidence_map, "ideal_response": shared_data_instance.get_data('theIdealResponse'), "prompt": shared_data_instance.get_data('prompt')}
+    response = [sync_async_runner(message) for _ in range(int(message.run_count))] 
+    insert(db_data)
+    return {"response": response, "ideal_response": shared_data_instance.get_data('theIdealResponse'), "prompt": shared_data_instance.get_data('prompt')}
 
 
 
