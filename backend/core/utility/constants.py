@@ -127,4 +127,14 @@ LLM_CONFIG_QUERY = """
     FROM llm_config         
 """
 
- 
+INSERT_TEST_RESULTS_QUERY = """
+        INSERT INTO test_results (total_tests, tests_passed, tests_failed, tests_pass_rate, average_execution_time, test_type,eval_name,accuracy)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING test_run_no;
+        """
+
+
+INSERT_TEST_RESULTS_DETAIL_QUERY = """
+        INSERT INTO test_results_detail (test_run_no, original_response, actual_response, ideal_response, difference,original_run_no,original_prompt, execution_time,fingerprint,matched_tokens,mismatched_tokens,mismatch_percentage, page,status,llm_latency)
+        VALUES (%s, %s, %s, %s, %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """
