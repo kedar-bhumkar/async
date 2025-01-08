@@ -134,10 +134,7 @@
     <input type="hidden" id="pageName" value="run_via_file">
     <script src="/common/script/shared.js"></script>
     <script>
-        // Load components
-        fetch('../common/html/sidebar.html').then(response => response.text()).then(data => document.getElementById('sidebar').innerHTML = data);
-        fetch('../common/html/header.html').then(response => response.text()).then(data => document.getElementById('header').innerHTML = data);
-        fetch('../common/html/page_selector.html').then(response => response.text()).then(data => document.getElementById('pageSelector').innerHTML = data);
+        loadComponents();
         console.log('run_consistency.html loaded');
 
         async function runConsistency() {

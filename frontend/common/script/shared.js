@@ -64,3 +64,23 @@ function runEvaluation() {
     })
     // ... rest of the function ...
 }
+
+  function loadComponents(){
+        // Load components
+        fetch('../common/html/sidebar.html').then(response => response.text()).then(data => {
+            document.getElementById('sidebar').innerHTML = data;
+            // Add this: Set active class on current page link
+            const currentPath = window.location.pathname;
+            const sidebarLinks = document.querySelectorAll('#sidebar a');
+            // First remove any existing active classes
+            sidebarLinks.forEach(link => link.classList.remove('active'));
+            // Then add active class to current page link
+            sidebarLinks.forEach(link => {
+                if (link.getAttribute('href') === currentPath) {
+                    link.classList.add('active');
+                }
+            });
+        });
+        fetch('../common/html/header.html').then(response => response.text()).then(data => document.getElementById('header').innerHTML = data);
+        fetch('../common/html/page_selector.html').then(response => response.text()).then(data => document.getElementById('pageSelector').innerHTML = data);
+    }

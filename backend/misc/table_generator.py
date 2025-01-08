@@ -25,7 +25,8 @@ def get_postgres_type(data_type: str) -> str:
         'json': 'JSON',
         'jsonb': 'JSONB',
         'serial': 'SERIAL PRIMARY KEY',
-        'bigserial': 'BIGSERIAL PRIMARY KEY'
+        'bigserial': 'BIGSERIAL PRIMARY KEY',
+        'timestamp without time zone': 'TIMESTAMP WITHOUT TIME ZONE'
     }
     return type_mapping.get(data_type.lower(), 'TEXT')
 

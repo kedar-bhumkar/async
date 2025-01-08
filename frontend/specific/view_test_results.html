@@ -233,9 +233,7 @@
 </div>
   
 <script>
-  // Load components
-  fetch('../common/html/sidebar.html').then(response => response.text()).then(data => document.getElementById('sidebar').innerHTML = data);
-  fetch('../common/html/header.html').then(response => response.text()).then(data => document.getElementById('header').innerHTML = data);
+  loadComponents();
  
   let TEST_RESULTS = new Map();
   let serverUrl = "http://localhost:8000"

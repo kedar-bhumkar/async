@@ -174,11 +174,10 @@
         </section>
     </main>
   </div>
-  
+<script src="/common/script/shared.js"></script>  
 <script>
   // Load components
-  fetch('../common/html/sidebar.html').then(response => response.text()).then(data => document.getElementById('sidebar').innerHTML = data);
-  fetch('../common/html/header.html').then(response => response.text()).then(data => document.getElementById('header').innerHTML = data);
+  loadComponents();
 
   // Add new function to fetch and populate test names
   async function loadTestNames() {
