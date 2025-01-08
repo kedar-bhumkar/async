@@ -8,12 +8,6 @@ config_file =".\\backend\\core\\config\\config.yaml"
 prompts_file=".\\backend\\core\\config\\prompts.yaml"
 db_conn_file='.\\backend\\core\\config\\db_config.yaml'
 
-
-
-
- 
-
-
 INSERT_QUERY = """ 
         INSERT INTO Run_stats (
             usecase,
@@ -33,13 +27,15 @@ INSERT_QUERY = """
             ideal_response_difference,
             mode,
             similarity_metric,
-            run_date,
+            created_at,
             use_for_training,
             fingerprint,
             input_token_count,
             output_token_count,
-            llm_latency
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            llm_latency,
+            prompt_config_id,
+            status
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         """
 READ_QUERY = """
         SELECT 
@@ -128,6 +124,10 @@ USER_PROMPT_QUERY = """
     
 """
 
+PROMPT_CONFIG_QUERY = """
+    SELECT *
+    FROM prompt_config
+"""
 
 LLM_CONFIG_QUERY = """
     SELECT *
@@ -135,13 +135,13 @@ LLM_CONFIG_QUERY = """
 """
 
 INSERT_TEST_RESULTS_QUERY = """
-        INSERT INTO test_results (total_tests, tests_passed, tests_failed, tests_pass_rate, average_execution_time, test_type,eval_name,accuracy)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO test_results (total_tests, tests_passed, tests_failed, tests_pass_rate, average_execution_time, test_type,eval_name,accuracy,created_at)
+        VALUES (%s,%s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING test_run_no;
         """
 
 
 INSERT_TEST_RESULTS_DETAIL_QUERY = """
-        INSERT INTO test_results_detail (test_run_no, original_response, actual_response, ideal_response, difference,original_run_no,original_prompt, execution_time,fingerprint,matched_tokens,mismatched_tokens,mismatch_percentage, page,status,llm_latency)
-        VALUES (%s, %s, %s, %s, %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        INSERT INTO test_results_detail (test_run_no, original_response, actual_response, ideal_response, difference,original_run_no,original_prompt, execution_time,fingerprint,matched_tokens,mismatched_tokens,mismatch_percentage, page,status,llm_latency,prompt_config_id,created_at)
+        VALUES (%s,%s,%s, %s, %s, %s, %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """

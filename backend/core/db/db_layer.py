@@ -45,12 +45,14 @@ def insert(data_list):
                 data['ideal_response_difference'],
                 data['mode'],
                 data['similarity_metric'],                
-                datetime.now(),  # Current date for run_date
+                datetime.now(),  # Current date for created_at
                 data['use_for_training'],
                 data['fingerprint'],
                 data['input_token_count'],
                 data['output_token_count'],
-                data['llm_latency']
+                data['llm_latency'],
+                data['prompt_config_id'],
+                data['status']
             ) 
             for data in data_list  
         ]
@@ -108,7 +110,7 @@ def insert_test_results_data(model:str,total_tests: int, tests_passed: int, test
     try:
         insert_query = INSERT_TEST_RESULTS_QUERY
         
-        cursor.execute(insert_query, (total_tests, tests_passed, tests_failed, pass_rate, average_execution_time, test_type, eval_name,accuracy))
+        cursor.execute(insert_query, (total_tests, tests_passed, tests_failed, pass_rate, average_execution_time, test_type, eval_name,accuracy,datetime.now()))
         test_run_no = cursor.fetchone()[0]
     
         conn.commit()
@@ -126,16 +128,15 @@ def insert_test_results_data(model:str,total_tests: int, tests_passed: int, test
             conn.close()
 
 
-def insert_test_results_detail_data(model:str,test_run_no: int,original_response: str,actual_response: str,ideal_response: str,difference: str,original_run_no: int,original_prompt: str, execution_time: float,fingerprint: str,matched_tokens: bool,mismatched_tokens: bool,mismatch_percentage: float, page: str,status: str,llm_latency: float):
-    #logger.critical(f"insert_test_results_detail_data - {model},{test_run_no},{original_response},{actual_response},{ideal_response},{difference},{original_run_no},{original_prompt}")
+def insert_test_results_detail_data(test_run_no: int,test:dict):    
     conn, cursor = connect()
     try: 
         insert_query = INSERT_TEST_RESULTS_DETAIL_QUERY
 
-        cursor.execute(insert_query, (test_run_no, original_response, actual_response, ideal_response, difference,original_run_no,original_prompt, execution_time,fingerprint,matched_tokens,mismatched_tokens,mismatch_percentage, page,status,llm_latency))
+        cursor.execute(insert_query, (test_run_no, test['original_response'], test['actual_response'], test['ideal_response'], test['idealResponse_changes'],test['original_run_no'],test['original_prompt'], test['execution_time'], test['fingerprint'],test['matched_tokens'],test['mismatched_tokens'],test['mismatch_percentage'], test['page'],test['status'],test['llm_latency'],test['prompt_config_id'],datetime.now()))
         conn.commit()
         print(f"Test results detail inserted successfully with run number: {test_run_no}")
-
+ 
     except Exception as e:
         print(f"Error inserting test results detail: {e}")
 
@@ -145,13 +146,15 @@ def insert_test_results_detail_data(model:str,test_run_no: int,original_response
         if conn:
             conn.close()
 
+
+
 def save_test_results(test_map,model,total_tests,passed_tests,failed_tests,pass_rate,average_execution_time,test_type,eval_name,accuracy):
     print(f"average_execution_time-{average_execution_time}")
     
     test_run_no = insert_test_results_data(model,total_tests,passed_tests,failed_tests,pass_rate,average_execution_time,test_type,eval_name,accuracy)
     for test in test_map.values():
-        print(f"test['execution_time']-{test['execution_time']}")
-        insert_test_results_detail_data(model,test_run_no,test['original_response'],test['actual_response'],test['ideal_response'],test['idealResponse_changes'],test['original_run_no'],test['original_prompt'], test['execution_time'], test['fingerprint'],test['matched_tokens'],test['mismatched_tokens'],test['mismatch_percentage'], test['page'],test['status'],test['llm_latency'])
+        print(f"test['execution_time']-{test['execution_time']}")       
+        insert_test_results_detail_data(test_run_no,test)
 
     return test_run_no
     
@@ -186,6 +189,12 @@ def get_user_prompt(usecase: str, page: str) -> str:
         return None
     return df.to_dict('records')[0]['user_prompt']
 
+@lru_cache(maxsize=100)
+def get_prompt_config(usecase: str, page: str):
+    df = read("".join([PROMPT_CONFIG_QUERY, f" where usecase='{usecase}' and page='{page}' and isactive=true"]))
+    if df.empty:
+        return None
+    return df.to_dict('records')[0]
 
 def get_llm_config():
     df = read("".join([LLM_CONFIG_QUERY, f" LIMIT 1"]))

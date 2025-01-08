@@ -102,9 +102,9 @@ def init_prompts(usecase, page):
     print("Entering method: init_prompts")
     global thePrompt,theSystemPrompt,theIdealResponse,theUserPrompt
     config = getConfig(prompts_file)     
-
-    theSystemPrompt = get_system_prompt(usecase, page)
-    theUserPrompt = get_user_prompt(usecase, page)
+    prompt_config = get_prompt_config(usecase, page)
+    theSystemPrompt = prompt_config['system_prompt']
+    theUserPrompt = prompt_config['user_prompt']
     print(f"shared_data_instance.get_data('request_type')-{shared_data_instance.get_data('request_type')}")
     if(shared_data_instance.get_data('request_type') != "api"):
         theIdealResponse = config[usecase]['user_prompt'][page]['serial']['ideal_response']
@@ -203,7 +203,8 @@ def init_test_result(message:Message, result,formatted_ideal_response,formatted_
     test_result['fingerprint'] = shared_data_instance.get_data('fingerprint')
     test_result['page'] = message.page
     test_result['status'] = 'success'
-    
+    test_result['prompt_config_id'] = get_prompt_config(message.usecase, message.page)['prompt_id']
+
     return test_result
 
 def init_run_stats(message:Message,result:ComparisonResult,time,formatted_ideal_response,formatted_real_response):    
@@ -235,7 +236,9 @@ def init_run_stats(message:Message,result:ComparisonResult,time,formatted_ideal_
             'fingerprint': shared_data_instance.get_data('fingerprint'),
             'input_token_count': shared_data_instance.get_data('input_token_count'),
             'output_token_count': shared_data_instance.get_data('output_token_count'),
-            'llm_latency': round(shared_data_instance.get_data('llm_latency'),2)
+            'llm_latency': round(shared_data_instance.get_data('llm_latency'),2),
+            'prompt_config_id': get_prompt_config(message.usecase, message.page)['prompt_id'],
+            'status': 'success'
         }
 
     return run_stats
