@@ -407,7 +407,7 @@
           document.getElementById('idealPane').style.display = 'block';
           document.getElementById('mismatchPercentage').parentElement.style.display = 'block';
           document.querySelectorAll('.container h2').forEach(h2 => {
-            if (h2.textContent === 'Ideal Response') {
+            if (h2.textContent.trim() === 'Ideal Response') {
               h2.style.display = 'block';
             }
           });
@@ -437,7 +437,7 @@
           document.getElementById('idealPane').style.display = 'none';
           document.getElementById('mismatchPercentage').parentElement.style.display = 'none';
           document.querySelectorAll('.container h2').forEach(h2 => {
-            if (h2.textContent === 'Ideal Response') {
+            if (h2.textContent.trim() === 'Ideal Response') {
               h2.style.display = 'none';
             }
           });
@@ -451,7 +451,7 @@
         // Update tooltips with formatted JSON
         const actualTooltip = document.querySelector('#responseLabel1 .json-content');
         try {
-          console.log('actual_response', actual_response)       
+                
           actualTooltip.textContent = JSON.stringify(JSON.parse(llmResponse.acd_response.response[0]), null, 2);       
         } catch (error) {
           console.error('Error formatting JSON for tooltips:', error);

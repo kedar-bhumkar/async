@@ -179,6 +179,14 @@ def get_system_prompt(usecase: str, page: str) -> str:
     return df.to_dict('records')[0]['system_prompt']
 
 
+@lru_cache(maxsize=100)
+def get_user_prompt(usecase: str, page: str) -> str:
+    df = read("".join([USER_PROMPT_QUERY, f" where usecase='{usecase}' and page='{page}' and isactive=true"]))
+    if df.empty:
+        return None
+    return df.to_dict('records')[0]['user_prompt']
+
+
 def get_llm_config():
     df = read("".join([LLM_CONFIG_QUERY, f" LIMIT 1"]))
     if df.empty:

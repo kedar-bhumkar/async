@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI):
     print("Server startup .....")  
     try:
         LLMConfig.load_config()
+        shared_data_instance.set_data('request_type', "api")
         print("LLM configuration loaded successfully")
     except Exception as e:
         print(f"Error loading LLM configuration: {e}")
@@ -99,6 +100,26 @@ def doEval( request:Request, evalRequest:EvalRequest):
     message = Message(run_mode="eval-test-llm", eval_request=evalRequest, usecase=usecase, page=page)
     test_run_no =  process_request(message)  
     return {"test_run_no": test_run_no}
+
+
+
+@app.post("/bulk_transcript")
+def doBulkTranscript( request:Request, evalRequest:EvalRequest):    
+    print(f"Inside doBulkTranscript ")     
+    # Print all keys and values in shared_data_instance
+    print("Shared Data Instance Contents:")
+    print(shared_data_instance.get_data('page'))
+    
+    page = evalRequest.page
+    usecase = 'acd'
+    print(f"csv_data - {evalRequest.csv_data}") 
+
+   # shared_data_instance.set_data('eval_request', evalRequest)
+   # shared_data_instance.set_data('page', evalRequest.page)
+
+    message = Message(run_mode="bulk_transcript", eval_request=evalRequest, usecase=usecase, page=page)
+    process_request(message)  
+    return {"message": "Bulk transcript completed successfully"}
 
 
 @app.post("/consistency")

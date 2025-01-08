@@ -122,6 +122,13 @@ SYSTEM_PROMPT_QUERY = """
     
 """
 
+USER_PROMPT_QUERY = """
+    SELECT user_prompt
+    FROM prompt_config
+    
+"""
+
+
 LLM_CONFIG_QUERY = """
     SELECT *
     FROM llm_config         

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Run via file</title>
+
+    <!-- Add Font Awesome CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../common/styles/main.css">
+    <link rel="stylesheet" href="/common/styles/shared.css">
+    <style>
+        
+    #eval-container {
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 2rem;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .file-upload-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        padding: 2rem;
+        border: 2px dashed #ccc;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+        transition: all 0.3s ease;
+    }
+
+    .file-upload-container:hover {
+        border-color: #007bff;
+        background-color: #f0f7ff;
+    }
+
+    .file-upload-container label {
+        font-size: 1.2rem;
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 0.5rem;
+    }
+
+    .file-upload-container input[type="file"] {
+        width: 100%;
+        max-width: 300px;
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: white;
+    }
+
+    .file-name {
+        color: #666;
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+    }
+
+    #runEvalButton {
+        margin: 2rem auto;
+        padding: 0.8rem 2rem;
+        font-size: 1.1rem;
+        min-width: 200px;
+        transition: transform 0.2s ease;
+    }
+
+    #runEvalButton:hover {
+        transform: translateY(-2px);
+    }
+
+    #resultsLink {
+        text-align: center;
+        margin: 1.5rem 0;
+    }
+
+    #resultsLink a {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.8rem 1.5rem;
+    }
+
+    #message {
+        text-align: center;
+        padding: 1rem;
+        border-radius: 4px;
+        margin: 1rem auto;
+        max-width: 600px;
+    }
+
+    #loading-message {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 1rem 2rem;
+        border-radius: 4px;
+        z-index: 1000;
+    }
+
+    #pageSelector {
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+
+    .eval-name-input {
+        width: 100%;
+        max-width: 300px;
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: white;
+        margin-bottom: 1rem;
+    }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="sidebar"></div>
+        <main>
+            <div id="header"></div>
+            <section id="main-content">
+                <div id="eval-container" class="container">
+                    <div id="pageSelector"></div>
+                    <div id="message"></div>
+                    <div class="file-upload-container">
+                        <label for="evalFile">
+                            <i class="fas fa-file-upload"></i>
+                            Upload Bulk Transcript File (CSV)
+                        </label>
+                        <input type="file" id="evalFile" accept=".csv">
+                        <div id="fileName" class="file-name"></div>
+                    </div>
+                    <button id="runEvalButton" class="primary-button" onclick="runBulkTranscript()">Run Bulk Transcript</button>
+                    <div id="resultsLink" style="margin-top: 20px;"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <footer>
+        <a href="#" id="aiHubLink"><i class="fas fa-user-md"></i></a>
+    </footer>
+
+    <input type="hidden" id="pageName" value="run_via_file">
+    <script src="/common/script/shared.js"></script>
+    <script>
+        // Load components
+        fetch('../common/html/sidebar.html').then(response => response.text()).then(data => document.getElementById('sidebar').innerHTML = data);
+        fetch('../common/html/header.html').then(response => response.text()).then(data => document.getElementById('header').innerHTML = data);
+        fetch('../common/html/page_selector.html').then(response => response.text()).then(data => document.getElementById('pageSelector').innerHTML = data);
+        console.log('run_eval.html loaded');
+
+    </script>
+    <script>
+
+        function handleFileUpload() {
+            const fileInput = document.getElementById('evalFile');
+            const fileNameDisplay = document.getElementById('fileName');
+            
+            fileInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    fileNameDisplay.textContent = `Selected file: ${file.name}`;
+                } else {
+                    fileNameDisplay.textContent = '';
+                }
+            });
+        }
+        
+        async function runBulkTranscript() {
+            const fileInput = document.getElementById('evalFile');
+            const file = fileInput.files[0];
+            const selectedPage = document.querySelector('input[name="page"]:checked').value;
+            
+            if (!file) {
+                showMessage('error', 'Please select a CSV file first');
+                return;
+            }
+
+            if (!file.name.toLowerCase().includes(selectedPage.toLowerCase())) {
+                showMessage('error', `Filename must contain the selected page name "${selectedPage}"`);
+                return;
+            }
+
+            hideMessage();
+            managePage('disable');
+            
+            const loadingMessage = document.createElement('div');
+            loadingMessage.id = 'loading-message';
+            loadingMessage.textContent = '💀 Processing bulk transcript file... Please wait.';
+            document.body.appendChild(loadingMessage);
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    // Convert file content to base64
+                    const base64Content = e.target.result.split(',')[1];
+                    
+                    const response = await fetch(`${serverUrl}/bulk_transcript`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            csv_data: base64Content,
+                            page: selectedPage
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    console.log('Evaluation response:', data);
+                    showMessage('info', 'Bulk transcript completed successfully - ' );
+                    
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    showMessage('error', 'Failed to process evaluation file');
+                } finally {
+                    loadingMessage.remove();
+                    managePage('enable');
+                }
+            };
+        
+            reader.onerror = () => {
+                showMessage('error', 'Error reading file');
+                loadingMessage.remove();
+                managePage('enable');
+            };
+        
+            reader.readAsDataURL(file);
+        }
+        // Add this to your DOMContentLoaded event listener
+        document.addEventListener('DOMContentLoaded', function() {
+            handleFileUpload();
+           
+        });        
+
+
+    </script>
+</body>
+</html>
+
+
+
+
+
+   
+   

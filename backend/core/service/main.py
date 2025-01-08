@@ -20,6 +20,7 @@ theLlmParameters = any
 theFormatter = None
 thePrompt = None
 theSystemPrompt= None
+theUserPrompt = None
 run_mode = None
 run_count= None
 run_id = None
@@ -49,7 +50,8 @@ def generate(client,count,prompt,page):
 
     completion_params.update(theLlmParameters)
     print(f"modified completion_params-{completion_params}")
- 
+   
+   
     start = time.perf_counter()
     chat_completion = client.chat.completions.create(**completion_params)   
     
@@ -98,12 +100,13 @@ def init_AI_client(model_family, model):
 
 def init_prompts(usecase, page):
     print("Entering method: init_prompts")
-    global thePrompt,theSystemPrompt,theIdealResponse
+    global thePrompt,theSystemPrompt,theIdealResponse,theUserPrompt
     config = getConfig(prompts_file)     
 
     theSystemPrompt = get_system_prompt(usecase, page)
-
-    if(shared_data_instance.get_data('theIdealResponse') == None or shared_data_instance.get_data('theIdealResponse') == ''):
+    theUserPrompt = get_user_prompt(usecase, page)
+    print(f"shared_data_instance.get_data('request_type')-{shared_data_instance.get_data('request_type')}")
+    if(shared_data_instance.get_data('request_type') != "api"):
         theIdealResponse = config[usecase]['user_prompt'][page]['serial']['ideal_response']
     else:
         theIdealResponse = shared_data_instance.get_data('theIdealResponse')
@@ -111,7 +114,7 @@ def init_prompts(usecase, page):
 
 def prompt_constrainer(page,thePrompt, count=None):
     print("Entering method: prompt_constrainer")
-    
+    global theUserPrompt
     negativePrompt = ''
     thePrompt = replace_dates(thePrompt)
     
@@ -123,13 +126,9 @@ def prompt_constrainer(page,thePrompt, count=None):
         print(f"phi detection is off")
     
     sharedPrompt = thePrompt
-    
+    print(f"sharedPrompt-{sharedPrompt}")
     #Create copy so that we just get what the user said minus constraints 
-    shared_data_instance.set_data('thePrompt', sharedPrompt)
-    
-    if(shared_data_instance.get_data('negative_prompt')== True):
-        negativePrompt = fuzzyMatch(thePrompt)   
-    logger.critical(f"negativePrompt-{negativePrompt}")
+    shared_data_instance.set_data('thePrompt', sharedPrompt)   
     
     try:
         cls = globals()[page]
@@ -138,9 +137,17 @@ def prompt_constrainer(page,thePrompt, count=None):
     else:    
         logger.info(f"pydantic model defined")
         response_schema_dict = cls.model_json_schema()
-        response_schema_json = json.dumps(response_schema_dict, indent=2)             
-        thePrompt = thePrompt.format(constraints=response_schema_json,missing_sections=negativePrompt)    
-        logger.info(f"thePrompt ****** -{thePrompt}")
+        response_schema_json = json.dumps(response_schema_dict, indent=2)         
+                
+        if(shared_data_instance.get_data('negative_prompt')== True):        
+            negativePrompt = fuzzyMatch(thePrompt)   
+            logger.critical(f"negativePrompt-{negativePrompt}")                 
+            thePrompt = theUserPrompt.format(constraints=response_schema_json,transcript=thePrompt,missing_sections=negativePrompt)    
+        else:
+            thePrompt = theUserPrompt.format(constraints=response_schema_json,transcript=thePrompt,missing_sections='')    
+        
+        print(f"theNewPrompt ****** -{thePrompt}")
+        
     finally:
         return thePrompt
     
@@ -202,7 +209,10 @@ def init_test_result(message:Message, result,formatted_ideal_response,formatted_
 def init_run_stats(message:Message,result:ComparisonResult,time,formatted_ideal_response,formatted_real_response):    
     print("Entering method: init_run_stats")
     global run_id, theSystemPrompt,thePrompt,theModel
+    _prompt = shared_data_instance.get_data('thePrompt')
+    print(f"thePrompt-{_prompt}")
     print(f"formatted_ideal_response-{formatted_ideal_response}")
+    print(f"formatted_real_response-{formatted_real_response}")
     run_stats = {
             'usecase': message.usecase,
             'mode':message.mode,
@@ -212,7 +222,7 @@ def init_run_stats(message:Message,result:ComparisonResult,time,formatted_ideal_
             'isBaseline': True,
             'run_no': run_id,
             'system_prompt': theSystemPrompt,
-            'user_prompt': truncate_prompt(thePrompt),
+            'user_prompt': _prompt,
             'response': formatted_real_response,
             'ideal_response':formatted_ideal_response,
             'execution_time': time,
@@ -238,8 +248,12 @@ def log(message:Message,response, time):
     formatted_ideal_response = ""
     
     formatted_real_response = get_Pydantic_Filtered_Response(message.page,response,theFormatter,response_type='actual')
-    formatted_ideal_response = get_Pydantic_Filtered_Response(message.page,theIdealResponse, None)       
-    
+    print(f"theIdealResponse-{theIdealResponse}")
+    if(theIdealResponse != None and  theIdealResponse != ''):
+        print("Computing ideal response")
+        formatted_ideal_response = get_Pydantic_Filtered_Response(message.page,theIdealResponse, None)       
+
+
     result = compare(formatted_ideal_response, formatted_real_response)
     shared_data_instance.set_data('theIdealResponse', formatted_ideal_response)
 
@@ -269,7 +283,7 @@ def init_defaults(message: Message):
     message.sleep = message.sleep or LLMConfig.get_default("sleep")
     message.model = message.model or LLMConfig.get_default("model")
     message.prompt = message.prompt or LLMConfig.get_default("prompt")
-    message.ideal_response = message.ideal_response or LLMConfig.get_default("ideal_response")
+    message.ideal_response = message.ideal_response or None
     message.usecase = message.usecase or LLMConfig.get_default("usecase")
     message.page = message.page or LLMConfig.get_default("page")
     message.test_size_limit = message.test_size_limit or 10
@@ -319,6 +333,9 @@ def process_request(message: Message):
 
         elif message.run_mode == "eval-test-llm":
             return _process_eval_test_llm(message)
+
+        elif message.run_mode == "bulk_transcript":
+            return _process_bulk_transcript(message)
 
         else:  # same-llm mode
             return _process_same_llm(message)    
@@ -441,6 +458,63 @@ def _process_eval_test_llm(message:Message):
     except Exception as e:
         logger.error(f"Error processing evaluation file: {str(e)}")
         return {"error": str(e)}
+
+
+def _process_bulk_transcript(message:Message):
+    print("Entering method: _process_bulk_transcript")
+    
+    bulk_file_data = message.eval_request.csv_data
+    print(f"bulk_file_data-{bulk_file_data}")
+    if not bulk_file_data:
+        logger.error("No evaluation file data found")
+    try:
+        # Convert to string if it's bytes
+        if isinstance(bulk_file_data, bytes):
+            bulk_file_data = bulk_file_data.decode('utf-8-sig')
+     
+
+            
+        try:
+            #df = pd.read_csv(StringIO(decoded_string))
+            print("reading csv")
+            df = pd.read_csv(StringIO(bulk_file_data))
+            print("reading csv done")
+        except Exception as e:
+            logger.error(f"CSV parsing error: {str(e)}")
+            return {"error": f"Could not parse CSV data: {str(e)}"}
+        
+        # Validate required columns
+        required_columns = ['user_prompt']
+        if not all(col in df.columns for col in required_columns):
+            logger.error("CSV file missing required columns: user_prompt")
+            return
+        
+        results = []
+        total_rows = len(df)
+        print(f"total_rows-{total_rows}")
+        exit
+        for index, row in df.iterrows():
+            logger.critical(f"Processing evaluation {index + 1} of {total_rows}")
+            
+            if pd.notna(row['user_prompt']):
+                # Construct prompt
+                prompt = ''.join([
+                    'Return_data_constraints: {constraints} ',
+                    row['user_prompt'],
+                    '{missing_sections}'
+                ])
+                message.prompt = prompt
+                message.page = message.eval_request.page   
+                message.run_mode = "bulk_transcript"             
+                response = sync_async_runner(message)                
+                insert(db_data)            
+                
+  
+    except Exception as e:
+        logger.error(f"Error processing evaluation file: {str(e)}")
+        return {"error": str(e)}
+
+
 
 def _process_same_llm(message:Message):
     global db_data  
