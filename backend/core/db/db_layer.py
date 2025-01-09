@@ -110,7 +110,7 @@ def insert_test_results_data(model:str,total_tests: int, tests_passed: int, test
     try:
         insert_query = INSERT_TEST_RESULTS_QUERY
         
-        cursor.execute(insert_query, (total_tests, tests_passed, tests_failed, pass_rate, average_execution_time, test_type, eval_name,accuracy,datetime.now()))
+        cursor.execute(insert_query, (total_tests, tests_passed, tests_failed, pass_rate, average_execution_time, test_type, eval_name,accuracy,datetime.now(),'active'))
         test_run_no = cursor.fetchone()[0]
     
         conn.commit()

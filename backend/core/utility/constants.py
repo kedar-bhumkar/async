@@ -135,8 +135,8 @@ LLM_CONFIG_QUERY = """
 """
 
 INSERT_TEST_RESULTS_QUERY = """
-        INSERT INTO test_results (total_tests, tests_passed, tests_failed, tests_pass_rate, average_execution_time, test_type,eval_name,accuracy,created_at)
-        VALUES (%s,%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO test_results (total_tests, tests_passed, tests_failed, tests_pass_rate, average_execution_time, test_type,eval_name,accuracy,created_at, status)
+        VALUES (%s,%s,%s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING test_run_no;
         """
 
