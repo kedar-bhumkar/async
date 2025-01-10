@@ -178,7 +178,7 @@ def sync_async_runner(message:Message):
     
     if(message.run_mode !=None):
         response = log(message, response, end)
-        #logger.critical(f"f-response-{response}")
+        print(f"raw-llm-response-{response}")
    
     time.sleep(float(message.sleep))
   
@@ -254,7 +254,7 @@ def log(message:Message,response, time):
     print(f"theIdealResponse-{theIdealResponse}")
     if(theIdealResponse != None and  theIdealResponse != ''):
         print("Computing ideal response")
-        formatted_ideal_response = get_Pydantic_Filtered_Response(message.page,theIdealResponse, None)       
+        formatted_ideal_response = get_Pydantic_Filtered_Response(message.page,theIdealResponse, theFormatter,response_type='ideal')       
 
 
     result = compare(formatted_ideal_response, formatted_real_response)
